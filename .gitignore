@@ -1,0 +1,12 @@
+# Wi-Fi password: copy esp32/Console_3DS/secrets.example.h to secrets.h and fill it in
+esp32/Console_3DS/secrets.h
+
+# Built launcher (rebuild it from laptop/launcher.py) + PyInstaller output
+*.exe
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
