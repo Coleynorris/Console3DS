@@ -91,7 +91,7 @@ unsigned long lastTouchSend = 0;
 unsigned long lastWifiTry = 0, lastMqttTry = 0;
 
 // Frame receiver
-static uint8_t jpgBuf[40000];             // laptop keeps updates under 38000 bytes
+static uint8_t jpgBuf[60000];             // laptop keeps updates under 58000 bytes
 uint16_t dmaBuf1[16 * 16], dmaBuf2[16 * 16];   // DMA ping-pong buffers (one JPEG block each)
 bool dmaSel = false;
 int statTiles = 0;

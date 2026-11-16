@@ -40,8 +40,13 @@ PORT = 5005
 OUT_W, OUT_H = 320, 240           # ESP32 screen = 3DS bottom screen
 TILE_W, TILE_H = 64, 48           # 5 x 5 tiles, multiples of 16 (JPEG blocks)
 FULL_IF_CHANGED = 16              # this many tiles changed (of 25) -> send one full frame
-JPEG_QUALITY = 70                 # lower = smaller/faster, uglier
-MAX_BODY = 38000                  # must fit in the ESP32 buffer (40000)
+JPEG_QUALITY = 90                 # lower = smaller/faster, uglier (was 70)
+JPEG_SUBSAMPLING = 0              # 0 = 4:4:4 full color detail (sharp colored text/edges)
+MAX_BODY = 58000                  # must fit in the ESP32 buffer (60000)
+# Resize Azahar's bottom window so the game is drawn at exactly 2x (640x480).
+# An exact multiple shrinks back to 320x240 without blur; 400x300 (1.25x) can't.
+# Set to 0 to leave the window alone.
+BOTTOM_WINDOW_SCALE = 2
 CAPTURE_FPS = 30
 KEEPALIVE_S = 1.0
 WINDOW_HINTS = ("Azahar", "Secondary Window")
@@ -98,6 +103,33 @@ def game_area(img):
     return img.crop((x, y, x + gw, y + gh))
 
 
+def fit_window(hwnd):
+    """Make the window's client area exactly 320x240 * BOTTOM_WINDOW_SCALE (no black bars)."""
+    if not BOTTOM_WINDOW_SCALE:
+        return
+    want_w, want_h = OUT_W * BOTTOM_WINDOW_SCALE, OUT_H * BOTTOM_WINDOW_SCALE
+    _, _, cw, ch = win32gui.GetClientRect(hwnd)
+    if (cw, ch) == (want_w, want_h):
+        return
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    border_w, border_h = (right - left) - cw, (bottom - top) - ch
+    SWP_NOMOVE, SWP_NOZORDER, SWP_NOACTIVATE = 0x2, 0x4, 0x10
+    win32gui.SetWindowPos(hwnd, 0, 0, 0, want_w + border_w, want_h + border_h,
+                          SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE)
+    _, _, cw, ch = win32gui.GetClientRect(hwnd)
+    print(f"Bottom window resized to {cw}x{ch} (game drawn at {BOTTOM_WINDOW_SCALE}x)")
+
+
+def shrink(img):
+    """Game area -> 320x240. Exact multiples average each block of pixels (sharp);
+    other sizes use Lanczos (sharpest general filter)."""
+    w, h = img.size
+    if (w, h) == (OUT_W, OUT_H):
+        return img
+    exact = w % OUT_W == 0 and h % OUT_H == 0 and w // OUT_W == h // OUT_H
+    return img.resize((OUT_W, OUT_H), Image.BOX if exact else Image.LANCZOS)
+
+
 class Capturer(threading.Thread):
     """Keeps grabbing the bottom screen so a fresh 320x240 picture is always ready."""
 
@@ -123,9 +155,10 @@ class Capturer(threading.Thread):
                         continue
                     warned = False
                     print("Capturing:", win32gui.GetWindowText(hwnd))
+                    fit_window(hwnd)
                 img = grab_window(hwnd)
                 if img is not None:
-                    small = game_area(img).resize((OUT_W, OUT_H), Image.BILINEAR)
+                    small = shrink(game_area(img))
                     with self.lock:
                         self.latest = small
                         self.seq += 1
@@ -143,7 +176,8 @@ class Capturer(threading.Thread):
 # ---------- Encoding ----------
 def jpeg(img, quality=JPEG_QUALITY):
     buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=quality)             # baseline JPEG (ESP32 decoder needs it)
+    img.save(buf, "JPEG", quality=quality,             # baseline JPEG (ESP32 decoder needs it)
+             subsampling=JPEG_SUBSAMPLING)
     return buf.getvalue()
 
 
