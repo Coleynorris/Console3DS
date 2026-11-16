@@ -10,3 +10,9 @@ dist/
 # Python
 __pycache__/
 *.pyc
+
+# Personal progress notes (kept locally only)
+TODO.md
+
+# Launcher settings (chosen game / Azahar path, per PC)
+console3ds_config.json

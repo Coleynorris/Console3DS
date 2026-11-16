@@ -104,17 +104,23 @@ No resistors and **no 3.3V** on the buttons: the sketch uses the ESP32's interna
    It sets the pins above and **SPI at 27 MHz** (40 MHz gave a black screen with this module).
    Updating the TFT_eSPI library overwrites this file, so copy it back after an update.
 
-### 3.2 Python
+### 3.2 Console3DS.exe (no Python needed)
 
-Install **Python 3.12** (tick "Add python.exe to PATH"), then:
+Download **`Console3DS.exe`** from this repo's
+[**Releases**](../../releases/latest) page and put it anywhere (e.g. your Desktop).
+It contains everything that runs on the laptop (bridge, screen stream, ViGEmBus driver installer).
 
-```powershell
-python -m pip install paho-mqtt pygame vgamepad pillow pywin32 mss pyinstaller
-```
+- First start: it asks for your **game file** and, if Azahar isn't in its default install folder,
+  for **azahar.exe**. It remembers them in `console3ds_config.json` next to the .exe.
+  **Hold SHIFT** while starting it to pick another game.
+- If the **ViGEmBus** driver (virtual Xbox controller) is missing, it offers to install it.
+  Restart the PC after that.
+- Windows may show **"Windows protected your PC"** (unsigned .exe): More info → Run anyway.
+- The first time, Windows Firewall may ask about network access for Console3DS: **Allow**
+  (tick Private and Public).
 
-`vgamepad` installs the **ViGEmBus** driver (accept the installer, then reboot).
-If the installer didn't run, start it by hand:
-`<Python>\Lib\site-packages\vgamepad\win\vigem\install\x64\ViGEmBusSetup_x64.msi`.
+Only if you want to run/modify the Python code instead: install **Python 3.12**, then
+`python -m pip install paho-mqtt vgamepad pillow pywin32 pygame pyinstaller` (see section 5).
 
 ### 3.3 MQTT broker (Mosquitto)
 
@@ -145,8 +151,9 @@ can't use 5 GHz; "Any available" can end up on 5 GHz). The laptop is always
 3. **View → Screen Layout → Separate Windows**: top and bottom screens in 2 windows.
    The bottom window is the one streamed to the ESP32. Don't minimize it (it can be behind
    other windows).
-4. **Emulation → Configure → Controls**: with `azahar_bridge.py` running, pick the Xbox 360
-   controller and bind each 3DS input by pressing the matching button on the ESP32.
+4. **Emulation → Configure → Controls** (once): start everything with Console3DS.exe, then
+   pick the Xbox 360 controller and bind each 3DS input by pressing the matching button on
+   the ESP32.
 
 ---
 
@@ -174,33 +181,30 @@ Until it's connected, the ESP32 shows a status screen: **WiFi / MQTT / Screen** 
 
 ### One click
 
-Double-click **`Console3DS.exe`**. It:
-1. checks the Mobile Hotspot (opens its settings if it's off) and Mosquitto,
-2. opens 2 windows: **Bridge** (controls + touch) and **Screen stream**,
-3. starts Azahar directly in the game,
-4. closes the 2 windows when you close Azahar.
+ESP32 powered and running `Console_3DS`, then double-click **`Console3DS.exe`**. It:
+1. asks for your game the first time (SHIFT = change game),
+2. checks the ViGEmBus driver, the Mobile Hotspot (opens its settings if it's off) and Mosquitto,
+3. opens 2 windows: **Bridge** (controls + touch) and **Screen stream**,
+4. starts Azahar directly in the game,
+5. closes the 2 windows when you close Azahar.
 
-The .exe isn't in the repo: build it yourself. First set **`GAMES_DIR`** (your games folder)
-and **`GAME_HINT`** (part of the game's file name) at the top of `laptop/launcher.py`
-(Azahar's default install path is already set; the scripts are found automatically). Then:
+### From the Python code (developers)
 
-```powershell
-cd laptop
-python -m PyInstaller --onefile --noconsole --name Console3DS --distpath .. launcher.py
-```
-
-Windows SmartScreen may warn about a self-made .exe the first time: More info → Run anyway.
-
-### By hand
-
-Hotspot on, ESP32 running `Console_3DS`, then two PowerShell windows in `laptop/`:
+Hotspot on, ESP32 running `Console_3DS`, then in `laptop/`:
 
 ```powershell
+python launcher.py           # same as the .exe
+# or each part by hand, in 2 windows, then start Azahar yourself:
 python azahar_bridge.py      # controls + touch -> Azahar
 python screen_stream.py      # Azahar bottom screen -> ESP32
 ```
 
-and start Azahar with the game.
+Build the .exe yourself:
+
+```powershell
+cd laptop
+python -m PyInstaller --onefile --noconsole --name Console3DS --collect-all vgamepad --distpath .. launcher.py
+```
 
 ### Controls
 
@@ -219,9 +223,7 @@ Not mapped yet: L, R, Select, D-pad, Home.
 
 ```
 Console3DS/
-├── Console3DS.exe              one-click launcher (built locally, not in the repo)
 ├── README.md
-├── TODO.md                     progress log + notes
 ├── broker/
 │   └── mosquitto.conf          Mosquitto config (copy into Program Files)
 ├── esp32/
@@ -233,9 +235,11 @@ Console3DS/
 └── laptop/
     ├── azahar_bridge.py        MQTT -> virtual Xbox controller + touch clicks
     ├── screen_stream.py        Azahar bottom window -> ESP32 (TCP 5005)
-    ├── launcher.py             source of Console3DS.exe
+    ├── launcher.py             source of Console3DS.exe (launcher + --bridge / --stream modes)
     └── test_game.py            small pygame test game (controls only now)
 ```
+
+`Console3DS.exe` is not in the repo itself: download it from **Releases** or build it.
 
 ### MQTT topics (all JSON)
 
@@ -265,10 +269,11 @@ Watch everything live:
 | Serial: `network not found` | Hotspot off or on 5 GHz → set band to 2.4 GHz |
 | Serial: `MQTT: failed, state -2` | Broker unreachable: Mosquitto service stopped, firewall rule missing, wrong IP |
 | Mosquitto service stops right after starting | A `log_dest stdout` line in the config (a service has no console) → log to a file |
-| `VIGEM_ERROR_BUS_NOT_FOUND` | ViGEmBus driver not installed → run the .msi (see 3.2), reboot |
+| `VIGEM_ERROR_BUS_NOT_FOUND` | ViGEmBus driver not installed → Console3DS.exe offers to install it; reboot |
 | `VIGEM_ERROR_TARGET_NOT_PLUGGED_IN` | First run while Windows installs the Xbox driver → run again. If it stays, install ViGEmBus 1.22 from github.com/nefarius/ViGEmBus/releases |
 | Azahar: "encrypted" | Decrypt your dump with GodMode9 on your own 3DS |
-| ESP32 stuck on "Screen ..." | `screen_stream.py` not running, Azahar not in Separate Windows, or bottom window minimized |
+| ESP32 stuck on "Screen ..." | Screen stream window not running, Azahar not in Separate Windows, bottom window minimized, or firewall blocking port 5005 |
+| Wrong game starts | Hold SHIFT while starting Console3DS.exe and pick the right file |
 | Bottom screen colors wrong | Flip `JPEG_SWAP_IN_DECODER` in `Console_3DS.ino` |
 | Touch lands next to the right spot | Run `Touch_Calibrate9` again |
 | Touch does nothing in Azahar | In `azahar_bridge.py` set `TOUCH_MODE = "mouse"` |
